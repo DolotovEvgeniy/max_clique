@@ -14,7 +14,9 @@ typedef vector<Vertex> Clique;
 typedef vector< vector<char> > AdjacencyMatrix;
 typedef int Color;
 typedef vector< vector<Vertex> > ColorSets;
-bool operator<(Clique a, Clique b) {
+
+
+bool operator<(const Clique& a, const Clique& b) {
     return a.size() < b.size();
 }
 
@@ -91,7 +93,7 @@ void printClique(const Clique &clique) {
     }
     cout << endl;
 }
-Color maxColor(ColorSets colors) {
+Color maxColor(const ColorSets& colors) {
     return  colors.size()-1;
 }
 
@@ -119,26 +121,28 @@ public:
                 throw string("invalid file");
             }
         }
-        ColorSets colors = colorGraph();
-        Color maxUsedColor = maxColor(colors);
-        colorCount_ = maxUsedColor + 1;
-        for (int i = 0; i < vertexCount(); i++) {
-            neighborsCount_.push_back(neighborsCount(i));
+        for (int i = 0; i < vertexCount_; i++) {
+            verticesDegree_.push_back(neighborsCount(i));
         }
-        float density = 2*edgeCount_/float(vertexCount_*(vertexCount_-1));
-        cout << density << endl;
-        //cout <<"bound: " << vertexCount_/float((1-density)*vertexCount_+) <<endl;
-
     }
     bool isNeighbors(Vertex a, Vertex b) const {
         return adjacencyMatrix_[a][b] == 1;
     }
-    vector<int> vertexDegree(vector<Vertex> vertices) const {
+    vector<int> verticesDegree(vector<Vertex> vertices) const {
         vector<int> verticesNeighborsCount;
         for (int i = 0; i < vertices.size(); i++) {
             verticesNeighborsCount.push_back(neighborsCount(vertices[i]));
         }
         return verticesNeighborsCount;
+    }
+    int vertexDegree(Vertex v) const {
+        return verticesDegree_[v];
+    }
+    void sortByDegree(vector<Vertex>& vertices) const {
+        sort(vertices.begin(), vertices.end(),
+             [this](const Vertex &v1, const Vertex &v2) {
+            return vertexDegree(v1) < vertexDegree(v2);
+        });
     }
 
     vector<Vertex> getNeighbors(Vertex v) const {
@@ -149,18 +153,6 @@ public:
             }
         }
         return neighbors;
-    }
-    vector<Vertex> getNeighborsInSet(Vertex v, vector<Vertex> vertices) const {
-        vector<Vertex> neighbors;
-        for(int i = 0; i < vertices.size(); i++) {
-            if(isNeighbors(v, vertices[i])) {
-                neighbors.push_back(vertices[i]);
-            }
-        }
-        return neighbors;
-    }
-    int neighborsInSetCount(Vertex v, vector<Vertex> vertices) const {
-        return getNeighborsInSet(v, vertices).size();
     }
 
     vector<Vertex> getNeighbors(vector<Vertex> vertices) const {
@@ -187,23 +179,6 @@ public:
         return getNeighbors(vertices).size();
     }
 
-    int vertexCount() const {
-        return vertexCount_;
-    }
-    int colorCount() const {
-        return colorCount_;
-    }
-    bool isClique(vector<Vertex> vertices) const {
-        for (size_t i = 0; i < vertices.size(); ++i) {
-            for (size_t j = i + 1; j < vertices.size(); ++j) {
-                if ( !isNeighbors(vertices[i], vertices[j]) ) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-    //private:
     vector<Vertex> getVertices() const {
         vector<Vertex> vertices;
         for (int i = 0; i < vertexCount_;i++) {
@@ -213,28 +188,23 @@ public:
     }
 
     ColorSets colorVertices(const vector<Vertex>& vertices) const {
-        //printClique(vertices);
         ColorSets colors;
         map<Vertex, Color> vertex2color;
         for(int i = 0; i < vertices.size(); i++) {
             vertex2color[vertices[i]] = -1;
         }
-
+        Color maxColor = -1;
         for(Vertex v = 0; v < vertices.size(); ++v) {
             vector<Vertex> neighbors = vertices & getNeighbors(vertices[v]);
-
             vector<Color> neighborsColor(neighbors.size());
             for (int i = 0; i < neighbors.size(); ++i) {
                 neighborsColor[i] = vertex2color[neighbors[i]];
             }
             neighborsColor.erase(remove(neighborsColor.begin(), neighborsColor.end(), -1),
                                  neighborsColor.end());
-            Color maxColor = -1;
-            if(!neighborsColor.empty()) {
-                maxColor = *max_element(neighborsColor.begin(), neighborsColor.end());
-            }
+
             bool isColored = false;
-            for (Color c = 0; c < maxColor; c++) {
+            for (Color c = 0; c <= maxColor; c++) {
                 if(find(neighborsColor.begin(), neighborsColor.end(), c) == neighborsColor.end()) {
                     colors[c].push_back(vertices[v]);
                     vertex2color[vertices[v]] = c;
@@ -245,53 +215,18 @@ public:
             if (!isColored) {
                 colors.push_back({vertices[v]});
                 vertex2color[vertices[v]] = maxColor+1;
+                maxColor++;
             }
         }
         return colors;
     }
     ColorSets colorGraph() const {
-        vector<Vertex> vertices;
-        for (int i = 0; i < vertexCount_;i++) {
-            vertices.push_back(i);
-        }
-        return colorVertices(vertices);
+        return colorVertices(getVertices());
     }
-
-    Clique lowerBound() const {
-        Vertex v = distance(neighborsCount_.begin(),
-                            max_element(neighborsCount_.begin(),
-                                        neighborsCount_.end()));
-       // printClique(neighborsCount_);
-        Clique clique;
-        clique.push_back(v);
-       // printClique(clique);
-        vector<Vertex> neighbors = getNeighbors(clique);
-        while(!neighbors.empty()) {
-            vector<int> verticesNeighborsCount = vertexDegree(neighbors);
-            int maxVertexIndex = distance(verticesNeighborsCount.begin(),
-                                          max_element(verticesNeighborsCount.begin(),
-                                                      verticesNeighborsCount.end()));
-            clique.push_back(neighbors[maxVertexIndex]);
-            vector<Vertex> new_neighbors = getNeighbors(clique);
-            //if (new_neighbors == neighbors) {
-            //    return clique.size();
-            //} else {
-            neighbors = new_neighbors;
-            //}
-            //cout << "c" << endl;
-            //printClique(clique);
-            //cout << "n" << endl;
-            //printClique(neighbors);
-            int gg;
-            //cin >> gg;
-        }
-        return clique;
-    }
-
+private:
+    vector<int> verticesDegree_;
     int vertexCount_;
     int edgeCount_;
-    int colorCount_;
-    vector<int> neighborsCount_;
     AdjacencyMatrix adjacencyMatrix_;
 
 };
@@ -303,28 +238,18 @@ pair<Vertex, Color> vertexWithGreatestColor(ColorSets colors) {
 Clique currClique;
 Clique maxClique;
 int theta = 4;
-
+int maxColorCount;
 
 ColorSets reusingColors(const Graph & graph,
                         vector<Vertex> candidates, ColorSets colors) {
-   // cout << "prev color" << endl;
-   // for(int i = 0; i < colors.size(); i++) {
-   //     printClique(colors[i]);
-   // }
     ColorSets newColors(colors.size());
     for(int i = 0; i < colors.size(); i++) {
         newColors[i] = colors[i] & candidates;
     }
-    // remove empty colors
-    //cout << "colors" << endl;
 
 
     newColors.erase(remove_if(newColors.begin(), newColors.end(),
                               [](const vector<Vertex>& v) {return v.size() == 0;}), newColors.end());
-    //cout << "colors" << endl;
-    //for(int i = 0; i < newColors.size(); i++) {
-    //    printClique(newColors[i]);
-    //}
     ColorSets resultColors;
     for(int i = 0; i < newColors.size(); i++) {
         if(newColors[i].size() == 1) {
@@ -350,52 +275,24 @@ ColorSets reusingColors(const Graph & graph,
     return resultColors;
 }
 
-ColorSets recoloring(const Graph & graph,
-                     vector<Vertex> candidates) {
-    return {};
-}
-
 void findMaxClique(const Graph & graph,
                    vector<Vertex> candidates, ColorSets colors) {
-    int i;
-    // cin >> i;
-    //cout << maxClique.size() << endl;
-    //cout << " max clique start candidates:";
-    //printClique(candidates);
-    //cout << "max clique colors" << endl;
-    //for(int i = 0; i < colors.size(); i++) {
-    //    printClique(colors[i]);
-   // }
     while(!candidates.empty()) {
         pair<Vertex, Color> vertexAndColor = vertexWithGreatestColor(colors);
         Vertex v = vertexAndColor.first;
         int vColor = vertexAndColor.second;
-        //cout<< "use vertex: " << v <<endl;
         if(currClique.size()+ vColor <= maxClique.size()) return;
         currClique = currClique | v;
         vector<Vertex> newCandidates = candidates & graph.getNeighbors(v);
-
         if(!newCandidates.empty()) {
             ColorSets newColors;
-            if(currClique.size()-1+ vColor <= maxClique.size()+theta) {
-            //    printClique(newCandidates);
-              //  cout << " start reusing" << endl;
+            if(currClique.size() + vColor <= 1+maxClique.size()+theta) {
 
                 newColors = reusingColors(graph, newCandidates, colors);
-                //cout << "reusing end" << endl;
             } else {
-                //cout << "start color vertices" << endl;
-                newColors = graph.colorVertices(newCandidates);//recoloring(graph, newCandidates);
-                //cout << "new colors" << endl;
-                //for(int i = 0; i < newColors.size(); i++) {
-                //    printClique(newColors[i]);
-               // }
-               // cout << "end color vertices" << endl;
+                newColors = graph.colorVertices(newCandidates);
             }
-            //cout << "max begin" << endl;
-
             findMaxClique(graph, newCandidates, newColors);
-            //cout << "max end" << endl;
         } else if (currClique.size() > maxClique.size()) {
             maxClique = currClique;
         }
@@ -415,7 +312,8 @@ void findMaxClique(const Graph& graph) {
     currClique = {};
     maxClique  = {};
     vector<Vertex> candidates = graph.getVertices();
-    ColorSets colors = graph.colorVertices(candidates);
+    ColorSets colors = graph.colorGraph();
+    maxColorCount = colors.size();
     findMaxClique(graph, candidates, colors);
 }
 
@@ -424,6 +322,5 @@ int main(int argc, char** argv) {
     findMaxClique(graph);
     printClique(maxClique);
     cout << maxClique.size();
-    //printClique(maxClique);
     return 0;
 }
